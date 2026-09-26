@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { LanguageCode, IntentResult } from '../../../shared/schemas/index.ts';
 import { interpretVoiceOrText } from '../services/api.ts';
+import { ChatMessage } from '../components/SiriVoiceAssistantModal.tsx';
 
 export type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -24,15 +25,49 @@ export function useVoiceCompanion({
   const [aiResponse, setAiResponse] = useState<string>('');
   const [pendingIntent, setPendingIntent] = useState<IntentResult | null>(null);
   const [suggestedRoute, setSuggestedRoute] = useState<string | null>(null);
-  const [isContinuous, setIsContinuous] = useState<boolean>(true);
+  const [isAssistantOpen, setIsAssistantOpen] = useState<boolean>(false);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
 
   const recognitionRef = useRef<any>(null);
-  const isContinuousRef = useRef<boolean>(true);
+  const isAssistantOpenRef = useRef<boolean>(false);
   const isSpeakingRef = useRef<boolean>(false);
+  const shouldListenRef = useRef<boolean>(false);
 
   useEffect(() => {
-    isContinuousRef.current = isContinuous;
-  }, [isContinuous]);
+    isAssistantOpenRef.current = isAssistantOpen;
+  }, [isAssistantOpen]);
+
+  const getTimeBasedGreeting = useCallback(() => {
+    const hour = new Date().getHours();
+    if (language === 'te') {
+      if (hour >= 17) {
+        return 'హలో, శుభ సాయంత్రం లక్ష్మీధర్ రెడ్డి గారు! నేను ARC, మీ వాయిస్ అసిస్టెంట్. నా మైక్రోఫోన్ ఆన్‌లో ఉంది, నేను వింటున్నాను. ఈ రోజు మీకు ఎలా సహాయపడాలి?';
+      } else if (hour >= 12) {
+        return 'హలో, శుభ మధ్యాహ్నం లక్ష్మీధర్ రెడ్డి గారు! నేను ARC, మీ వాయిస్ అసిస్టెంట్. నా మైక్రోఫోన్ ఆన్‌లో ఉంది, నేను వింటున్నాను. మీకు ఎలా సహాయపడాలి?';
+      }
+      return 'హలో, శుభోదయం లక్ష్మీధర్ రెడ్డి గారు! నేను ARC, మీ వాయిస్ అసిస్టెంట్. నా మైక్రోఫోన్ ఆన్‌లో ఉంది, నేను వింటున్నాను. మీకు ఎలా సహాయపడాలి?';
+    } else if (language === 'ta') {
+      if (hour >= 17) {
+        return 'வணக்கம், மாலை வணக்கம் லக்ஷ்மிதர் ரெட்டி! நான் ARC, உங்கள் குரல் தோழன். மைக்ரோஃபோன் ஆன் செய்யப்பட்டுள்ளது, நான் கேட்கிறேன். இன்று உங்களுக்கு எவ்வாறு உதவட்டும்?';
+      }
+      return 'வணக்கம், காலை வணக்கம் லக்ஷ்மிதர் ரெட்டி! நான் ARC, உங்கள் குரல் தோழன். நான் கேட்கிறேன், உங்களுக்கு எவ்வாறு உதவட்டும்?';
+    } else if (language === 'hi') {
+      if (hour >= 17) {
+        return 'नमस्ते, शुभ संध्या लक्ष्मीधर रेड्डी जी! मैं ARC हूँ, आपका वॉयस असिस्टेंट। मेरा माइक ऑन है और मैं सुन रहा हूँ। आज मैं आपकी क्या सहायता करूँ?';
+      } else if (hour >= 12) {
+        return 'नमस्ते, शुभ दोपहर लक्ष्मीधर रेड्डी जी! मैं ARC हूँ, आपका वॉयस असिस्टेंट। मेरा माइक ऑन है, आप क्या पूछना चाहते हैं?';
+      }
+      return 'नमस्ते, शुभ प्रभात लक्ष्मीधर रेड्डी जी! मैं ARC हूँ, आपका वॉयस असिस्टेंट। मेरा माइक ऑन है, आज मैं आपकी क्या सहायता करूँ?';
+    }
+
+    // Default English
+    if (hour >= 17) {
+      return 'Hello, good evening Lakshmidhar Reddy! I am ARC, your voice assistant. My microphone is on and I am listening. How can I assist you today?';
+    } else if (hour >= 12) {
+      return 'Hello, good afternoon Lakshmidhar Reddy! I am ARC, your voice assistant. My microphone is on and I am listening. How can I assist you today?';
+    }
+    return 'Hello, good morning Lakshmidhar Reddy! I am ARC, your voice assistant. My microphone is on and I am listening. How can I assist you today?';
+  }, [language]);
 
   const speakText = useCallback(
     (text: string, lang: LanguageCode, onEndCallback?: () => void) => {
@@ -53,7 +88,7 @@ export function useVoiceCompanion({
           };
           const targetLocale = langMap[lang] || 'en-US';
           utterance.lang = targetLocale;
-          utterance.rate = 0.90; // Calibrated for elderly clarity
+          utterance.rate = 0.90; // Natural cadence for elder clarity
           utterance.pitch = 1.0;
 
           const voices = window.speechSynthesis.getVoices();
@@ -77,13 +112,22 @@ export function useVoiceCompanion({
             if (onEndCallback) {
               onEndCallback();
             }
+            // Once speaking finishes, immediately re-arm the mic if in assistant mode
+            if (shouldListenRef.current || isAssistantOpenRef.current) {
+              setTimeout(() => {
+                startListening();
+              }, 250);
+            }
           };
 
           utterance.onerror = () => {
             isSpeakingRef.current = false;
             setVoiceState('idle');
-            if (onEndCallback) {
-              onEndCallback();
+            if (onEndCallback) onEndCallback();
+            if (shouldListenRef.current || isAssistantOpenRef.current) {
+              setTimeout(() => {
+                startListening();
+              }, 250);
             }
           };
 
@@ -103,6 +147,7 @@ export function useVoiceCompanion({
   );
 
   const startListening = useCallback(() => {
+    // If ARC is currently speaking, wait for speech to finish to avoid audio feedback
     if (isSpeakingRef.current) {
       return;
     }
@@ -113,6 +158,14 @@ export function useVoiceCompanion({
     ) {
       const SpeechRecognition =
         (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+      // Avoid duplicate starts
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (e) {}
+      }
+
       const recognition = new SpeechRecognition();
       recognitionRef.current = recognition;
 
@@ -132,31 +185,53 @@ export function useVoiceCompanion({
 
       recognition.onresult = (event: any) => {
         const text = event.results[0][0].transcript;
-        setTranscript(text);
-        sendVoiceQuery(text);
+        if (text && text.trim()) {
+          setTranscript(text);
+          sendVoiceQuery(text.trim());
+        }
       };
 
       recognition.onerror = (e: any) => {
-        console.warn('Speech recognition status:', e);
-        setVoiceState('idle');
+        // Siri/Alexa behavior: Persistent mic does not shut down on silence/timeout
+        if ((shouldListenRef.current || isAssistantOpenRef.current) && !isSpeakingRef.current) {
+          setTimeout(() => {
+            try {
+              recognition.start();
+              setVoiceState('listening');
+            } catch (err) {}
+          }, 400);
+        } else {
+          setVoiceState('idle');
+        }
       };
 
       recognition.onend = () => {
-        setVoiceState((prev) => (prev === 'listening' ? 'idle' : prev));
+        // Siri/Alexa behavior: Automatically restart listening when silence occurs
+        if ((shouldListenRef.current || isAssistantOpenRef.current) && !isSpeakingRef.current) {
+          setTimeout(() => {
+            try {
+              recognition.start();
+              setVoiceState('listening');
+            } catch (err) {}
+          }, 250);
+        } else {
+          setVoiceState((prev) => (prev === 'listening' ? 'idle' : prev));
+        }
       };
 
       try {
         recognition.start();
+        setVoiceState('listening');
       } catch (e) {
         setVoiceState('idle');
       }
     } else {
-      // Mock listening fallback for browsers without speech recognition
       setVoiceState('listening');
     }
   }, [language]);
 
   const stopListening = useCallback(() => {
+    shouldListenRef.current = false;
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -168,20 +243,36 @@ export function useVoiceCompanion({
   const sendVoiceQuery = useCallback(
     async (queryText: string) => {
       if (!queryText.trim()) {
-        setVoiceState('idle');
         return;
       }
 
+      const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const userMsg: ChatMessage = {
+        id: `u-${Date.now()}`,
+        sender: 'user',
+        text: queryText,
+        timestamp: now,
+      };
+
+      setChatHistory((prev) => [...prev, userMsg]);
+      setTranscript(queryText);
+      setVoiceState('processing');
+
       try {
-        setVoiceState('processing');
-        setTranscript(queryText);
         const res = await interpretVoiceOrText(elderId, queryText, language);
         const intentRes: IntentResult = res.intent_result;
 
         setAiResponse(intentRes.response_text);
         setSuggestedRoute(intentRes.suggested_route || null);
 
-        // Check if intent directs calling someone
+        const arcMsg: ChatMessage = {
+          id: `a-${Date.now()}`,
+          sender: 'arc',
+          text: intentRes.response_text,
+          timestamp: now,
+        };
+        setChatHistory((prev) => [...prev, arcMsg]);
+
         const isCallFamily =
           intentRes.intent === 'CALL_FAMILY' ||
           queryText.toLowerCase().includes('call someone') ||
@@ -192,30 +283,20 @@ export function useVoiceCompanion({
           queryText.toLowerCase().includes('dashboard') ||
           queryText.toLowerCase().includes('show dashboard');
 
-        // Spoken response with continuous loop callback
+        // Speak aloud, then re-activate continuous mic immediately upon completion
         speakText(intentRes.response_text, intentRes.language || language, () => {
-          // If pure navigation to Health/Medicines/Family
           if (intentRes.suggested_route && onNavigate) {
             onNavigate(intentRes.suggested_route);
           } else if (isNavHealth && onNavigate) {
             onNavigate('Health');
           }
 
-          // If calling someone was requested, launch call modal after speaking
           if (isCallFamily && onCallRequested) {
             onCallRequested({
               name: 'Rahul (Son)',
               phone: '9080503005',
               relationship: 'Son',
             });
-            return;
-          }
-
-          // In continuous mode, continue listening for the elder's next question!
-          if (isContinuousRef.current) {
-            setTimeout(() => {
-              startListening();
-            }, 500);
           }
         });
 
@@ -228,49 +309,66 @@ export function useVoiceCompanion({
           }
         }
       } catch (err: any) {
-        const errMsg =
+        const fallbackText =
           language === 'te'
-            ? 'నాతో మాట్లాడండి లక్ష్మీధర్ రెడ్డి గారు, నేను వింటున్నాను.'
+            ? 'లక్ష్మీధర్ రెడ్డి గారు, నేను మీతోనే ఉన్నాను. దయచేసి చెప్పండి, నేను వింటున్నాను.'
             : language === 'hi'
-            ? 'मैं सुन रहा हूँ लक्ष्मीधर रेड्डी जी, कृपया बोलिए।'
-            : 'I am right here with you, Lakshmidhar Reddy. I am listening.';
-        setAiResponse(errMsg);
-        speakText(errMsg, language, () => {
-          if (isContinuousRef.current) {
-            setTimeout(startListening, 500);
-          }
-        });
+            ? 'लक्ष्मीधर रेड्डी जी, मैं सुन रहा हूँ। कृपया कहिए।'
+            : 'I am right here with you, Lakshmidhar Reddy. Please speak, I am listening.';
+
+        setAiResponse(fallbackText);
+        setChatHistory((prev) => [
+          ...prev,
+          {
+            id: `a-${Date.now()}`,
+            sender: 'arc',
+            text: fallbackText,
+            timestamp: now,
+          },
+        ]);
+        speakText(fallbackText, language);
       }
     },
-    [elderId, language, speakText, onNavigate, onCallRequested, onRefreshData, startListening]
+    [elderId, language, speakText, onNavigate, onCallRequested, onRefreshData]
   );
 
   /**
-   * Activates Voice Assistance, greets the elder with "Hello Lakshmidhar Reddy!",
-   * and immediately starts listening for their reply.
+   * Opens Siri/Alexa mode, speaks the friendly time-of-day greeting to Lakshmidhar Reddy,
+   * and keeps the microphone continuously active.
    */
-  const enableAssistantAndGreet = useCallback(() => {
-    setIsContinuous(true);
-    isContinuousRef.current = true;
+  const openAssistantModal = useCallback(() => {
+    setIsAssistantOpen(true);
+    isAssistantOpenRef.current = true;
+    shouldListenRef.current = true;
 
-    const greetings: Record<LanguageCode, string> = {
-      en: 'Hello Lakshmidhar Reddy! I am listening. How are you feeling today?',
-      te: 'హలో లక్ష్మీధర్ రెడ్డి గారు! నేను వింటున్నాను. ఈ రోజు మీకు ఎలా ఉంది?',
-      ta: 'வணக்கம் லக்ஷ்மிதர் ரெட்டி! நான் கேட்கிறேன். இன்று நீங்கள் எப்படி இருக்கிறீர்கள்?',
-      hi: 'नमस्ते लक्ष्मीधर रेड्डी जी! मैं सुन रहा हूँ। आज आप कैसा महसूस कर रहे हैं?',
-    };
-
-    const greetingText = greetings[language] || greetings.en;
+    const greetingText = getTimeBasedGreeting();
     setAiResponse(greetingText);
     setTranscript('');
 
+    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setChatHistory([
+      {
+        id: `greet-${Date.now()}`,
+        sender: 'arc',
+        text: greetingText,
+        timestamp: now,
+      },
+    ]);
+
+    // Speak greeting, then immediately start persistent listening
     speakText(greetingText, language, () => {
-      // Automatically activate listening once ARC finishes speaking greeting
       setTimeout(() => {
         startListening();
-      }, 400);
+      }, 300);
     });
-  }, [language, speakText, startListening]);
+  }, [getTimeBasedGreeting, language, speakText, startListening]);
+
+  const closeAssistantModal = useCallback(() => {
+    setIsAssistantOpen(false);
+    isAssistantOpenRef.current = false;
+    shouldListenRef.current = false;
+    stopListening();
+  }, [stopListening]);
 
   const confirmPendingAction = useCallback(
     async (confirmed: boolean) => {
@@ -304,9 +402,10 @@ export function useVoiceCompanion({
     aiResponse,
     pendingIntent,
     suggestedRoute,
-    isContinuous,
-    setIsContinuous,
-    enableAssistantAndGreet,
+    isAssistantOpen,
+    chatHistory,
+    openAssistantModal,
+    closeAssistantModal,
     startListening,
     stopListening,
     sendVoiceQuery,

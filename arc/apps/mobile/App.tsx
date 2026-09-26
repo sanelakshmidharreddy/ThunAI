@@ -9,6 +9,7 @@ import { FamilyScreen } from './screens/FamilyScreen.tsx';
 import { GovernmentScreen } from './screens/GovernmentScreen.tsx';
 import { EmergencyModal } from './screens/EmergencyModal.tsx';
 import { SafeCallModal } from './components/SafeCallModal.tsx';
+import { SiriVoiceAssistantModal } from './components/SiriVoiceAssistantModal.tsx';
 import { useVoiceCompanion } from './hooks/useVoiceCompanion.ts';
 import {
   fetchElderData,
@@ -60,9 +61,10 @@ export default function App() {
     aiResponse,
     pendingIntent,
     suggestedRoute,
-    isContinuous,
-    setIsContinuous,
-    enableAssistantAndGreet,
+    isAssistantOpen,
+    chatHistory,
+    openAssistantModal,
+    closeAssistantModal,
     startListening,
     confirmPendingAction,
     sendVoiceQuery,
@@ -176,7 +178,6 @@ export default function App() {
             transcript={transcript}
             aiResponse={aiResponse}
             pendingIntent={pendingIntent}
-            onTalkPress={startListening}
             onConfirmIntent={confirmPendingAction}
             onNavigate={(route) => {
               if (route === 'Emergency') {
@@ -196,8 +197,9 @@ export default function App() {
             medicineTotal={elderData?.medicines?.total_scheduled ?? 3}
             onSimulationTriggered={loadData}
             suggestedRoute={suggestedRoute}
-            onSpeakGreeting={enableAssistantAndGreet}
-            onEnableAssistant={enableAssistantAndGreet}
+            onTalkPress={openAssistantModal}
+            onSpeakGreeting={openAssistantModal}
+            onEnableAssistant={openAssistantModal}
             onSendVoiceQuery={(query) => sendVoiceQuery(query)}
             onSpeakAgain={(text) => speakText(text, language)}
             onCallRahul={() => {
@@ -212,8 +214,8 @@ export default function App() {
                 dashboard_access: true,
               });
             }}
-            isContinuous={isContinuous}
-            onToggleContinuous={() => setIsContinuous(!isContinuous)}
+            isContinuous={true}
+            onToggleContinuous={() => {}}
           />
         );
     }
@@ -256,6 +258,35 @@ export default function App() {
           onClose={() => setCallingContact(null)}
         />
       )}
+
+      {/* Siri / Alexa Interactive Voice Assistant Modal */}
+      <SiriVoiceAssistantModal
+        isOpen={isAssistantOpen}
+        onClose={closeAssistantModal}
+        voiceState={voiceState}
+        transcript={transcript}
+        aiResponse={aiResponse}
+        chatHistory={chatHistory}
+        language={language}
+        onSendQuery={sendVoiceQuery}
+        onSpeakAgain={(txt) => speakText(txt, language)}
+        onCallRahul={() => {
+          setCallingContact({
+            id: 'caregiver-rahul-01',
+            name: 'Rahul (Son)',
+            relationship: 'Son',
+            phone: '9080503005',
+            role: 'PRIMARY_CAREGIVER',
+            notification_permission: true,
+            emergency_contact: true,
+            dashboard_access: true,
+          });
+        }}
+        onNavigateHealth={() => {
+          closeAssistantModal();
+          setCurrentRoute('Health');
+        }}
+      />
     </SafeAreaView>
   );
 }

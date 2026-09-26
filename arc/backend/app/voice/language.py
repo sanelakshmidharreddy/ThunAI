@@ -45,21 +45,25 @@ def preserve_medical_entities(text: str, entities: Dict[str, Any]) -> Dict[str, 
         preserved["diastolic"] = float(bp_match.group(2))
         preserved["unit"] = "mmHg"
 
-    # Extract heart rate / pulse numbers
-    hr_match = re.search(r'(\d{2,3})\s*(?:bpm|beats|துடிப்பு|धड़कन|హృదయస్పందన)?', text, re.IGNORECASE)
-    if hr_match and "systolic" not in preserved:
-        val = float(hr_match.group(1))
-        if 40 <= val <= 220:
-            preserved["heart_rate"] = val
-            preserved["unit"] = "BPM"
+    # Extract heart rate / pulse numbers (requires explicit pulse/heart/bpm context)
+    has_hr_context = bool(re.search(r'\b(?:bpm|beats|pulse|heart\s*rate|துடிப்பு|धड़कन|హృదయస్పందన|పల్స్)\b', text, re.IGNORECASE))
+    if has_hr_context and "systolic" not in preserved:
+        hr_match = re.search(r'(\d{2,3})\s*(?:bpm|beats|துடிப்பு|धड़कन|హృదయస్పందన)?', text, re.IGNORECASE)
+        if hr_match:
+            val = float(hr_match.group(1))
+            if 40 <= val <= 220:
+                preserved["heart_rate"] = val
+                preserved["unit"] = "BPM"
 
-    # Extract blood sugar numbers
-    sugar_match = re.search(r'(\d{2,3})\s*(?:mg/dl|sugar|glucose|சர்க்கரை|शुगर|షుగర్)?', text, re.IGNORECASE)
-    if sugar_match and "heart_rate" not in preserved and "systolic" not in preserved:
-        val = float(sugar_match.group(1))
-        if 50 <= val <= 500:
-            preserved["blood_sugar"] = val
-            preserved["unit"] = "mg/dL"
+    # Extract blood sugar numbers (requires explicit sugar/glucose/mg/dl context)
+    has_sugar_context = bool(re.search(r'\b(?:mg/dl|sugar|glucose|சர்க்கரை|शुगर|షుగర్|గ్లూకోజ్)\b', text, re.IGNORECASE))
+    if has_sugar_context and "heart_rate" not in preserved and "systolic" not in preserved:
+        sugar_match = re.search(r'(\d{2,3})\s*(?:mg/dl|sugar|glucose|சர்க்கரை|शुगर|షుగర్)?', text, re.IGNORECASE)
+        if sugar_match:
+            val = float(sugar_match.group(1))
+            if 50 <= val <= 500:
+                preserved["blood_sugar"] = val
+                preserved["unit"] = "mg/dL"
 
     # Extract time patterns e.g. 8 PM, 8:00, 20:00, எட்டு மணிக்கு
     time_match = re.search(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?', text, re.IGNORECASE)
