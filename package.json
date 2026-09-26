@@ -1,0 +1,11 @@
+{
+  "name": "arc-solution",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:backend": "cd arc/backend && ..\\..\\arc_venv\\Scripts\\uvicorn app.main:app --reload --port 8000",
+    "dev:web": "cd arc/apps/caregiver-web && npm run dev",
+    "dev:mobile": "cd arc/apps/mobile && npm start",
+    "test:backend": "$env:PYTHONPATH='arc/backend'; .\\arc_venv\\Scripts\\python.exe -m pytest arc/backend/tests -v"
+  }
+}

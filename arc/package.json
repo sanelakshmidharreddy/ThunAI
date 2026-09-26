@@ -1,0 +1,24 @@
+{
+  "name": "arc-monorepo",
+  "version": "1.0.0",
+  "description": "ARC — AI Responsive Companion: Voice-first, multilingual elderly assistance and caregiver coordination platform",
+  "private": true,
+  "scripts": {
+    "dev:backend": "cd backend && uvicorn app.main:app --reload --port 8000",
+    "dev:web": "cd apps/caregiver-web && npm run dev",
+    "dev:mobile": "cd apps/mobile && npm start",
+    "test:backend": "cd backend && pytest tests -v",
+    "build:web": "cd apps/caregiver-web && npm run build"
+  },
+  "keywords": [
+    "elderly-care",
+    "voice-ai",
+    "pydantic-ai",
+    "langgraph",
+    "fastapi",
+    "react-native",
+    "multilingual"
+  ],
+  "author": "ARC Engineering Team",
+  "license": "MIT"
+}
